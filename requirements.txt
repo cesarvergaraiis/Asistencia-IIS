@@ -1,6 +1,4 @@
 streamlit
 pandas
 plotly
-openpyxl
-O365
-streamlit_gsheets
+st-gsheets-connection
