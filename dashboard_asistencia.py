@@ -5,7 +5,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
 # Configuración de la página
-st.set_page_config(page_title="Dashboard de Asistencia Ipsos", layout="wide")
+st.set_page_config(page_title="Asistencia SW IIS Chile", layout="wide")
 
 @st.cache_data(ttl=600)
 def load_data():
@@ -69,7 +69,7 @@ try:
     df = load_data()
 
     if not df.empty:
-        st.title("📊 Control de Presencialidad por Equipo")
+        st.title("📊 Asistencia SW IIS Chile")
 
         st.sidebar.header("Panel de Filtros")
         
