@@ -69,7 +69,7 @@ try:
     df = load_data()
 
     if not df.empty:
-        st.title("📊 Asistencia SW IIS Chile")
+        st.title("📊 Asistencia IIS")
 
         st.sidebar.header("Panel de Filtros")
         
