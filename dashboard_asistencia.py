@@ -11,24 +11,28 @@ def get_google_sheet_url(base_url, gid):
     return base_url.replace("/edit?usp=sharing", f"/export?format=csv&gid={gid}")
 
 @st.cache_data
+@st.cache_data
 def load_data():
-    base_url = "https://docs.google.com/spreadsheets/d/1H6aWDWu-9wHbEd1iUIrb0tkIMf5S_7xkgrx7YSQbo8c"
+    # ID del documento extraído de tu URL
+    sheet_id = "1H6aWDWu-9wHbEd1iUIrb0tkIMf5S_7xkgrx7YSQbo8c"
     
-    # 1. Cargar Hoja de Personas (Maestro)
-    url_personas = get_google_sheet_url(base_url, "538750195")
+    # URLs de exportación directa
+    url_asistencia = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=215689985"
+    url_personas = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=538750195"
+    
+    # 1. Cargar Hoja de Personas
     df_personas = pd.read_csv(url_personas)
     
     # 2. Cargar Hoja de Asistencia
-    url_asistencia = get_google_sheet_url(base_url, "215689985")
     df_raw = pd.read_csv(url_asistencia)
     
-    # --- PROCESAMIENTO DE ASISTENCIA ---
-    # Seleccionar columna C (Fecha) y E a BU (Nombres)
-    # Nota: Columnas en pandas son base 0. C=2, E=4, BU=72. AB=27.
-    cols_interes = [2] + [i for i in range(4, 73) if i != 27]
-    df_asistencia = df_raw.iloc[:, cols_interes].copy()
+    # --- PROCESAMIENTO ---
+    # Seleccionar Fecha (C=2) y Nombres (E a BU = 4 a 72), saltando AB (27)
+    # Ajustamos los índices para asegurar que no tome columnas vacías
+    cols_idx = [2] + [i for i in range(4, 73) if i != 27]
+    df_asistencia = df_raw.iloc[:, cols_idx].copy()
     
-    # Renombrar columnas usando el texto en corchetes [...]
+    # Limpiar nombres de columnas con Regex
     new_cols = {}
     for col in df_asistencia.columns:
         if col == df_asistencia.columns[0]:
@@ -39,11 +43,18 @@ def load_data():
     
     df_asistencia = df_asistencia.rename(columns=new_cols)
     
-    # Convertir de formato ancho a largo (Tidy Data)
-    df_melted = df_asistencia.melt(id_vars=["Fecha"], var_name="Nombre", value_name="Estado")
-    df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha']).dt.date
+    # Eliminar filas donde la fecha sea nula (evita errores de parseo)
+    df_asistencia = df_asistencia.dropna(subset=["Fecha"])
     
-    # 3. Cruzar datos con la tabla de personas
+    # Convertir a formato largo
+    df_melted = df_asistencia.melt(id_vars=["Fecha"], var_name="Nombre", value_name="Estado")
+    
+    # IMPORTANTE: Convertir fecha con errors='coerce' para evitar que 
+    # basura en el CSV rompa el programa
+    df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha'], errors='coerce').dt.date
+    df_melted = df_melted.dropna(subset=["Fecha"]) # Elimina lo que no sea fecha
+    
+    # 3. Cruzar datos
     df_final = pd.merge(df_melted, df_personas, on="Nombre", how="left")
     
     return df_final
