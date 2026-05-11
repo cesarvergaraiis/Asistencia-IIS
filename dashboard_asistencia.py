@@ -11,54 +11,56 @@ def get_google_sheet_url(base_url, gid):
     return base_url.replace("/edit?usp=sharing", f"/export?format=csv&gid={gid}")
 
 @st.cache_data
-@st.cache_data
 def load_data():
-    # ID del documento extraído de tu URL
     sheet_id = "1H6aWDWu-9wHbEd1iUIrb0tkIMf5S_7xkgrx7YSQbo8c"
-    
-    # URLs de exportación directa
     url_asistencia = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=215689985"
     url_personas = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=538750195"
     
-    # 1. Cargar Hoja de Personas
+    # 1. Cargar datos
     df_personas = pd.read_csv(url_personas)
-    
-    # 2. Cargar Hoja de Asistencia
     df_raw = pd.read_csv(url_asistencia)
     
-    # --- PROCESAMIENTO ---
-    # Seleccionar Fecha (C=2) y Nombres (E a BU = 4 a 72), saltando AB (27)
-    # Ajustamos los índices para asegurar que no tome columnas vacías
+    # 2. Selección de columnas: Fecha (C=2) y Personas (E=4 a BU=72, saltando AB=27)
+    # Usamos iloc para mayor precisión con los índices
     cols_idx = [2] + [i for i in range(4, 73) if i != 27]
     df_asistencia = df_raw.iloc[:, cols_idx].copy()
     
-    # Limpiar nombres de columnas con Regex
+    # 3. Limpiar nombres de columnas (Extraer texto en corchetes)
     new_cols = {}
     for col in df_asistencia.columns:
         if col == df_asistencia.columns[0]:
             new_cols[col] = "Fecha"
         else:
             match = re.search(r'\[(.*?)\]', str(col))
-            new_cols[col] = match.group(1) if match else col
+            # Si hay corchetes, usamos el interior. Si no, ignoramos la columna o usamos el nombre original
+            new_cols[col] = match.group(1) if match else f"Eliminar_{col}"
     
     df_asistencia = df_asistencia.rename(columns=new_cols)
     
-    # Eliminar filas donde la fecha sea nula (evita errores de parseo)
-    df_asistencia = df_asistencia.dropna(subset=["Fecha"])
-    
-    # Convertir a formato largo
+    # Eliminar columnas que no tenían corchetes (si las hubiera)
+    df_asistencia = df_asistencia.loc[:, ~df_asistencia.columns.str.startswith('Eliminar_')]
+
+    # 4. Transformar a formato largo (Melt)
     df_melted = df_asistencia.melt(id_vars=["Fecha"], var_name="Nombre", value_name="Estado")
     
-    # IMPORTANTE: Convertir fecha con errors='coerce' para evitar que 
-    # basura en el CSV rompa el programa
-    df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha'], errors='coerce').dt.date
-    df_melted = df_melted.dropna(subset=["Fecha"]) # Elimina lo que no sea fecha
+    # --- LIMPIEZA DE NULOS (Tu solicitud) ---
+    # Eliminamos filas donde el Estado sea nulo o esté vacío
+    df_melted = df_melted.dropna(subset=["Estado"])
+    df_melted = df_melted[df_melted["Estado"].str.strip() != ""]
     
-    # 3. Cruzar datos
+    # Limpiar fechas nulas y convertir a objeto date
+    df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha'], errors='coerce').dt.date
+    df_melted = df_melted.dropna(subset=["Fecha"])
+    
+    # 5. Cruzar con maestro de personas
+    # Esto añadirá Area, Equipo y País a cada registro de asistencia
     df_final = pd.merge(df_melted, df_personas, on="Nombre", how="left")
     
+    # Opcional: Si una persona marcó asistencia pero no está en el maestro, 
+    # podemos llenar sus datos como "Sin asignar"
+    df_final[['Area', 'Equipo', 'País']] = df_final[['Area', 'Equipo', 'País']].fillna("No definido")
+    
     return df_final
-
 # Cargar datos
 try:
     df = load_data()
