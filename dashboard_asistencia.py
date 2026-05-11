@@ -2,143 +2,108 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import re
+from datetime import datetime
 
-# Configuración de la página
-st.set_page_config(page_title="Control de Asistencia", layout="wide")
+# 1. CONFIGURACIÓN DE PÁGINA
+st.set_page_config(page_title="Dashboard Asistencia", layout="wide")
 
-# --- FUNCIONES DE CARGA DE DATOS ---
-def get_google_sheet_url(base_url, gid):
-    return base_url.replace("/edit?usp=sharing", f"/export?format=csv&gid={gid}")
-
+# --- FUNCIONES DE CARGA Y LIMPIEZA ---
 @st.cache_data
 def load_data():
     sheet_id = "1H6aWDWu-9wHbEd1iUIrb0tkIMf5S_7xkgrx7YSQbo8c"
+    # URLs de exportación directa a CSV
     url_asistencia = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=215689985"
     url_personas = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=538750195"
     
-    # 1. Cargar datos
+    # Cargar datos
+    df_raw_asistencia = pd.read_csv(url_asistencia)
     df_personas = pd.read_csv(url_personas)
-    df_raw = pd.read_csv(url_asistencia)
     
-    # 2. Selección de columnas: Fecha (C=2) y Personas (E=4 a BU=72, saltando AB=27)
-    # Usamos iloc para mayor precisión con los índices
-    cols_idx = [2] + [i for i in range(4, 73) if i != 27]
-    df_asistencia = df_raw.iloc[:, cols_idx].copy()
+    # --- PROCESAMIENTO ASISTENCIA ---
+    # Columnas: Fecha (C=2), Personas (E=4 hasta BU=72), saltando AB (27)
+    indices_personas = [i for i in range(4, 73) if i != 27]
+    cols_interes = [2] + indices_personas
     
-    # 3. Limpiar nombres de columnas (Extraer texto en corchetes)
+    df_asistencia = df_raw_asistencia.iloc[:, cols_interes].copy()
+    
+    # Limpiar nombres de columnas con Regex (solo lo que está en [...])
     new_cols = {}
     for col in df_asistencia.columns:
         if col == df_asistencia.columns[0]:
             new_cols[col] = "Fecha"
         else:
             match = re.search(r'\[(.*?)\]', str(col))
-            # Si hay corchetes, usamos el interior. Si no, ignoramos la columna o usamos el nombre original
-            new_cols[col] = match.group(1) if match else f"Eliminar_{col}"
+            new_cols[col] = match.group(1) if match else f"SKIP_{col}"
     
     df_asistencia = df_asistencia.rename(columns=new_cols)
+    # Eliminar columnas que no tenían el formato [Nombre]
+    df_asistencia = df_asistencia.loc[:, ~df_asistencia.columns.str.startswith('SKIP_')]
     
-    # Eliminar columnas que no tenían corchetes (si las hubiera)
-    df_asistencia = df_asistencia.loc[:, ~df_asistencia.columns.str.startswith('Eliminar_')]
-
-    # 4. Transformar a formato largo (Melt)
+    # Transformar a formato largo (Melt)
     df_melted = df_asistencia.melt(id_vars=["Fecha"], var_name="Nombre", value_name="Estado")
     
-    # --- LIMPIEZA DE NULOS (Tu solicitud) ---
-    # Eliminamos filas donde el Estado sea nulo o esté vacío
+    # LIMPIEZA DE DATOS (Solo registros con datos)
     df_melted = df_melted.dropna(subset=["Estado"])
     df_melted = df_melted[df_melted["Estado"].str.strip() != ""]
     
-    # Limpiar fechas nulas y convertir a objeto date
+    # Limpiar y convertir Fechas
     df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha'], errors='coerce').dt.date
     df_melted = df_melted.dropna(subset=["Fecha"])
     
-    # 5. Cruzar con maestro de personas
-    # Esto añadirá Area, Equipo y País a cada registro de asistencia
+    # 3. UNIR CON MAESTRO DE PERSONAS
     df_final = pd.merge(df_melted, df_personas, on="Nombre", how="left")
     
-    # Opcional: Si una persona marcó asistencia pero no está en el maestro, 
-    # podemos llenar sus datos como "Sin asignar"
-    df_final[['Area', 'Equipo', 'País']] = df_final[['Area', 'Equipo', 'País']].fillna("No definido")
-    
+    # Llenar nulos en metadatos por si alguien no está en la lista de personas
+    for col in ['Area', 'Equipo', 'País']:
+        if col in df_final.columns:
+            df_final[col] = df_final[col].fillna("No definido")
+            
     return df_final
-# Cargar datos
+
+# Cargar los datos
 try:
     df = load_data()
 except Exception as e:
-    st.error(f"Error al cargar los datos: {e}")
+    st.error(f"Error al conectar con Google Sheets: {e}")
+    st.info("Asegúrate de que el archivo sea público (Cualquier persona con el enlace).")
     st.stop()
 
-# --- SIDEBAR (FILTROS) ---
-st.sidebar.header("Filtros")
-# --- INICIALIZACIÓN DE ESTADO ---
-# Definimos los valores por defecto si no existen en la sesión
-if 'filtros_reset' not in st.session_state:
-    st.session_state.filtros_reset = False
+# --- LÓGICA DE FILTROS Y ESTADO ---
+min_date = df['Fecha'].min()
+max_date = df['Fecha'].max()
 
+# Función para restablecer filtros
 def reset_filtros():
-    # Esta función limpia las llaves de los widgets en el session_state
-    st.session_state["f_fecha"] = [min_date, max_date]
+    st.session_state["f_fecha"] = (min_date, max_date)
     st.session_state["f_pais"] = []
     st.session_state["f_area"] = []
     st.session_state["f_equipo"] = []
     st.session_state["f_nombre"] = []
 
-# --- SIDEBAR (FILTROS) ---
-st.sidebar.header("Filtros")
+# --- SIDEBAR ---
+st.sidebar.header("🔍 Filtros")
+st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 
-# Botón de Reset
-st.sidebar.button("Restablecer Filtros", on_click=reset_filtros)
-
-# Filtro de Fecha con 'key'
+# Filtros con Session State
 fecha_sel = st.sidebar.date_input(
     "Rango de Fechas", 
-    value=st.session_state.get("f_fecha", [min_date, max_date]),
+    value=st.session_state.get("f_fecha", (min_date, max_date)),
     key="f_fecha"
 )
 
-# Filtros Multiselect con 'key'
-f_pais = st.sidebar.multiselect(
-    "País", 
-    unique_sorted("País"), 
-    key="f_pais"
-)
+def multiselect_filter(label, column, key):
+    options = sorted(df[column].unique().tolist())
+    return st.sidebar.multiselect(label, options, key=key)
 
-f_area = st.sidebar.multiselect(
-    "Área", 
-    unique_sorted("Area"), 
-    key="f_area"
-)
+f_pais = multiselect_filter("País", "País", "f_pais")
+f_area = multiselect_filter("Área", "Area", "f_area")
+f_equipo = multiselect_filter("Equipo", "Equipo", "f_equipo")
+f_nombre = multiselect_filter("Nombre", "Nombre", "f_nombre")
 
-f_equipo = st.sidebar.multiselect(
-    "Equipo", 
-    unique_sorted("Equipo"), 
-    key="f_equipo"
-)
-
-f_nombre = st.sidebar.multiselect(
-    "Nombre", 
-    unique_sorted("Nombre"), 
-    key="f_nombre"
-)
-
-# El resto del código de filtrado se mantiene igual...
-# Filtro de Fecha
-min_date = df['Fecha'].min()
-max_date = df['Fecha'].max()
-fecha_sel = st.sidebar.date_input("Rango de Fechas", [min_date, max_date])
-
-# Filtros Multiselect
-def unique_sorted(col):
-    return sorted(df[col].dropna().unique())
-
-f_pais = st.sidebar.multiselect("País", unique_sorted("País"))
-f_area = st.sidebar.multiselect("Área", unique_sorted("Area"))
-f_equipo = st.sidebar.multiselect("Equipo", unique_sorted("Equipo"))
-f_nombre = st.sidebar.multiselect("Nombre", unique_sorted("Nombre"))
-
-# Aplicar Filtros
+# APLICAR FILTROS AL DATAFRAME
 df_filt = df.copy()
-if len(fecha_sel) == 2:
+
+if isinstance(fecha_sel, tuple) and len(fecha_sel) == 2:
     df_filt = df_filt[(df_filt['Fecha'] >= fecha_sel[0]) & (df_filt['Fecha'] <= fecha_sel[1])]
 
 if f_pais: df_filt = df_filt[df_filt['País'].isin(f_pais)]
@@ -149,36 +114,46 @@ if f_nombre: df_filt = df_filt[df_filt['Nombre'].isin(f_nombre)]
 # --- DASHBOARD PRINCIPAL ---
 st.title("📊 Control de Asistencia")
 
-# Métricas rápidas
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Total Registros", len(df_filt))
-with col2:
-    presentes = len(df_filt[df_filt['Estado'] == 'Presente'])
-    st.metric("Presentes", presentes)
-with col3:
-    ausentes = len(df_filt[df_filt['Estado'] == 'OOO'])
-    st.metric("En OOO", ausentes)
+# Métricas Principales
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Total Registros", len(df_filt))
+m2.metric("Presentes", len(df_filt[df_filt['Estado'] == 'Presente']))
+m3.metric("Remotos", len(df_filt[df_filt['Estado'].str.contains('Remoto', na=False)]))
+m4.metric("OOO", len(df_filt[df_filt['Estado'] == 'OOO']))
 
-st.divider()
+st.markdown("---")
 
 # Gráficos
-c1, c2 = st.columns(2)
+col_left, col_right = st.columns(2)
 
-with c1:
-    st.subheader("Distribución de Asistencia")
-    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, 
-                     color_discrete_sequence=px.colors.qualitative.Safe)
+with col_left:
+    st.subheader("Distribución General")
+    fig_pie = px.pie(
+        df_filt, 
+        names='Estado', 
+        hole=0.4,
+        color_discrete_sequence=px.colors.qualitative.Pastel
+    )
     st.plotly_chart(fig_pie, use_container_width=True)
 
-with c2:
+with col_right:
     st.subheader("Asistencia por Equipo")
-    # Agrupamos para ver cuántos están "Presente" o "Remoto" por equipo
-    df_equipo_chart = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
-    fig_bar = px.bar(df_equipo_chart, x='Equipo', y='Cantidad', color='Estado', barmode='group')
+    # Agrupamos para contar estados por equipo
+    df_bar = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
+    fig_bar = px.bar(
+        df_bar, 
+        x='Equipo', 
+        y='Cantidad', 
+        color='Estado', 
+        barmode='group'
+    )
     st.plotly_chart(fig_bar, use_container_width=True)
 
 # Tabla de Detalle
-st.divider()
-st.subheader("Detalle de Registros")
-st.dataframe(df_filt, use_container_width=True)
+st.markdown("---")
+st.subheader("📋 Detalle de Registros")
+st.dataframe(
+    df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']], 
+    use_container_width=True,
+    hide_index=True
+)
