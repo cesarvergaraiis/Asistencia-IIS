@@ -11,15 +11,12 @@ st.set_page_config(page_title="Dashboard Asistencia", layout="wide")
 @st.cache_data
 def load_data():
     sheet_id = "1H6aWDWu-9wHbEd1iUIrb0tkIMf5S_7xkgrx7YSQbo8c"
-    # URLs de exportación directa a CSV
     url_asistencia = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=215689985"
     url_personas = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=538750195"
     
-    # Cargar datos
     df_raw_asistencia = pd.read_csv(url_asistencia)
     df_personas = pd.read_csv(url_personas)
     
-    # --- PROCESAMIENTO ASISTENCIA ---
     # Columnas: Fecha (C=2), Personas (E=4 hasta BU=72), saltando AB (27)
     indices_personas = [i for i in range(4, 73) if i != 27]
     cols_interes = [2] + indices_personas
@@ -36,13 +33,12 @@ def load_data():
             new_cols[col] = match.group(1) if match else f"SKIP_{col}"
     
     df_asistencia = df_asistencia.rename(columns=new_cols)
-    # Eliminar columnas que no tenían el formato [Nombre]
     df_asistencia = df_asistencia.loc[:, ~df_asistencia.columns.str.startswith('SKIP_')]
     
     # Transformar a formato largo (Melt)
     df_melted = df_asistencia.melt(id_vars=["Fecha"], var_name="Nombre", value_name="Estado")
     
-    # LIMPIEZA DE DATOS (Solo registros con datos)
+    # LIMPIEZA DE DATOS
     df_melted = df_melted.dropna(subset=["Estado"])
     df_melted = df_melted[df_melted["Estado"].str.strip() != ""]
     
@@ -50,10 +46,9 @@ def load_data():
     df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha'], errors='coerce').dt.date
     df_melted = df_melted.dropna(subset=["Fecha"])
     
-    # 3. UNIR CON MAESTRO DE PERSONAS
+    # UNIR CON MAESTRO DE PERSONAS
     df_final = pd.merge(df_melted, df_personas, on="Nombre", how="left")
     
-    # Llenar nulos en metadatos por si alguien no está en la lista de personas
     for col in ['Area', 'Equipo', 'País']:
         if col in df_final.columns:
             df_final[col] = df_final[col].fillna("No definido")
@@ -65,20 +60,20 @@ try:
     df = load_data()
 except Exception as e:
     st.error(f"Error al conectar con Google Sheets: {e}")
-    st.info("Asegúrate de que el archivo sea público (Cualquier persona con el enlace).")
     st.stop()
 
 # --- LÓGICA DE FILTROS Y ESTADO ---
 min_date = df['Fecha'].min()
 max_date = df['Fecha'].max()
 
-# Función para restablecer filtros
+# Función para restablecer filtros (Añadido f_estado)
 def reset_filtros():
     st.session_state["f_fecha"] = (min_date, max_date)
     st.session_state["f_pais"] = []
     st.session_state["f_area"] = []
     st.session_state["f_equipo"] = []
     st.session_state["f_nombre"] = []
+    st.session_state["f_estado"] = [] # <--- Nuevo
 
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Filtros")
@@ -95,6 +90,8 @@ def multiselect_filter(label, column, key):
     options = sorted(df[column].unique().tolist())
     return st.sidebar.multiselect(label, options, key=key)
 
+# Componentes de filtrado
+f_estado = multiselect_filter("Estado de Asistencia", "Estado", "f_estado") # <--- Nuevo
 f_pais = multiselect_filter("País", "País", "f_pais")
 f_area = multiselect_filter("Área", "Area", "f_area")
 f_equipo = multiselect_filter("Equipo", "Equipo", "f_equipo")
@@ -106,6 +103,8 @@ df_filt = df.copy()
 if isinstance(fecha_sel, tuple) and len(fecha_sel) == 2:
     df_filt = df_filt[(df_filt['Fecha'] >= fecha_sel[0]) & (df_filt['Fecha'] <= fecha_sel[1])]
 
+# Lógica de aplicación de filtros multiselect
+if f_estado: df_filt = df_filt[df_filt['Estado'].isin(f_estado)] # <--- Nuevo
 if f_pais: df_filt = df_filt[df_filt['País'].isin(f_pais)]
 if f_area: df_filt = df_filt[df_filt['Area'].isin(f_area)]
 if f_equipo: df_filt = df_filt[df_filt['Equipo'].isin(f_equipo)]
@@ -114,7 +113,7 @@ if f_nombre: df_filt = df_filt[df_filt['Nombre'].isin(f_nombre)]
 # --- DASHBOARD PRINCIPAL ---
 st.title("📊 Control de Asistencia")
 
-# Métricas Principales
+# Métricas Principales (Dinámicas según filtros)
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Total Registros", len(df_filt))
 m2.metric("Presentes", len(df_filt[df_filt['Estado'] == 'Presente']))
@@ -138,7 +137,6 @@ with col_left:
 
 with col_right:
     st.subheader("Asistencia por Equipo")
-    # Agrupamos para contar estados por equipo
     df_bar = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
     fig_bar = px.bar(
         df_bar, 
