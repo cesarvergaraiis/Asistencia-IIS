@@ -56,7 +56,8 @@ def load_data():
         
         # 4. Limpieza de nombres
         df_long['Nombre'] = df_long['Persona_Original'].apply(lambda x: x.split('.')[-1].strip() if '.' in x else x)
-        df_long['Nombre'] = df_long['Persona_Original'].apply(lambda x: x.split('[')[-1].split(']')[0].strip() if '[' in x and ']' in x else x)df_long['Equipo'] = df_long['Selecciona Equipo']
+        df_long['Nombre'] = df_long['Persona_Original'].apply(lambda x: x.split('[')[-1].split(']')[0].strip() if '[' in x and ']' in x else x)
+        df_long['Equipo'] = df_long['Selecciona Equipo']
         
         return df_long
 
