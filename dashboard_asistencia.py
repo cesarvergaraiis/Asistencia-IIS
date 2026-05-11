@@ -52,7 +52,8 @@ def load_data():
         df_long['Nombre'] = df_long['Nombre'].apply(lambda x: x.split('[')[-1].split(']')[0].strip() if '[' in x and ']' in x else x)
         
         # IMPORTANTE: Definimos 'Equipo' como el valor de 'Selecciona Equipo' de la hoja 215689985
-        df_long['Equipo'] = df_long['Selecciona Equipo'].astype(str).str.strip()
+        #df_long['Equipo'] = df_long['Selecciona Equipo'].astype(str).str.strip()
+        df_long['Equipo'] = df_long['Equipo'].astype(str).str.strip()
         
         # --- CRUCE CON REFERENCIA PARA TRAER PAÍS Y ÁREA ---
         if not df_ref.empty:
