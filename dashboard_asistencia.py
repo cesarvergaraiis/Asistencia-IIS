@@ -61,7 +61,8 @@ def load_data():
             # Ignoramos la columna 'Equipo' de la hoja de referencia para no confundir.
             df_long = pd.merge(
                 df_long, 
-                df_ref[['Nombre', 'Area', 'País']], 
+#                df_ref[['Nombre', 'Area', 'País']], 
+                df_ref[['Nombre', 'Area','Equipo' , 'País']], 
                 on='Nombre', 
                 how='left'
             )
