@@ -70,7 +70,58 @@ except Exception as e:
 
 # --- SIDEBAR (FILTROS) ---
 st.sidebar.header("Filtros")
+# --- INICIALIZACIÓN DE ESTADO ---
+# Definimos los valores por defecto si no existen en la sesión
+if 'filtros_reset' not in st.session_state:
+    st.session_state.filtros_reset = False
 
+def reset_filtros():
+    # Esta función limpia las llaves de los widgets en el session_state
+    st.session_state["f_fecha"] = [min_date, max_date]
+    st.session_state["f_pais"] = []
+    st.session_state["f_area"] = []
+    st.session_state["f_equipo"] = []
+    st.session_state["f_nombre"] = []
+
+# --- SIDEBAR (FILTROS) ---
+st.sidebar.header("Filtros")
+
+# Botón de Reset
+st.sidebar.button("Restablecer Filtros", on_click=reset_filtros)
+
+# Filtro de Fecha con 'key'
+fecha_sel = st.sidebar.date_input(
+    "Rango de Fechas", 
+    value=st.session_state.get("f_fecha", [min_date, max_date]),
+    key="f_fecha"
+)
+
+# Filtros Multiselect con 'key'
+f_pais = st.sidebar.multiselect(
+    "País", 
+    unique_sorted("País"), 
+    key="f_pais"
+)
+
+f_area = st.sidebar.multiselect(
+    "Área", 
+    unique_sorted("Area"), 
+    key="f_area"
+)
+
+f_equipo = st.sidebar.multiselect(
+    "Equipo", 
+    unique_sorted("Equipo"), 
+    key="f_equipo"
+)
+
+f_nombre = st.sidebar.multiselect(
+    "Nombre", 
+    unique_sorted("Nombre"), 
+    key="f_nombre"
+)
+
+# El resto del código de filtrado se mantiene igual...
 # Filtro de Fecha
 min_date = df['Fecha'].min()
 max_date = df['Fecha'].max()
