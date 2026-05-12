@@ -66,20 +66,18 @@ except Exception as e:
 min_date = df['Fecha'].min()
 max_date = df['Fecha'].max()
 
-# Función para restablecer filtros (Añadido f_estado)
 def reset_filtros():
     st.session_state["f_fecha"] = (min_date, max_date)
     st.session_state["f_pais"] = []
     st.session_state["f_area"] = []
     st.session_state["f_equipo"] = []
     st.session_state["f_nombre"] = []
-    st.session_state["f_estado"] = [] # <--- Nuevo
+    st.session_state["f_estado"] = []
 
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Filtros")
 st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 
-# Filtros con Session State
 fecha_sel = st.sidebar.date_input(
     "Rango de Fechas", 
     value=st.session_state.get("f_fecha", (min_date, max_date)),
@@ -90,21 +88,18 @@ def multiselect_filter(label, column, key):
     options = sorted(df[column].unique().tolist())
     return st.sidebar.multiselect(label, options, key=key)
 
-# Componentes de filtrado
-f_estado = multiselect_filter("Estado de Asistencia", "Estado", "f_estado") # <--- Nuevo
+f_estado = multiselect_filter("Estado de Asistencia", "Estado", "f_estado")
 f_pais = multiselect_filter("País", "País", "f_pais")
 f_area = multiselect_filter("Área", "Area", "f_area")
 f_equipo = multiselect_filter("Equipo", "Equipo", "f_equipo")
 f_nombre = multiselect_filter("Nombre", "Nombre", "f_nombre")
 
-# APLICAR FILTROS AL DATAFRAME
+# APLICAR FILTROS
 df_filt = df.copy()
-
 if isinstance(fecha_sel, tuple) and len(fecha_sel) == 2:
     df_filt = df_filt[(df_filt['Fecha'] >= fecha_sel[0]) & (df_filt['Fecha'] <= fecha_sel[1])]
 
-# Lógica de aplicación de filtros multiselect
-if f_estado: df_filt = df_filt[df_filt['Estado'].isin(f_estado)] # <--- Nuevo
+if f_estado: df_filt = df_filt[df_filt['Estado'].isin(f_estado)]
 if f_pais: df_filt = df_filt[df_filt['País'].isin(f_pais)]
 if f_area: df_filt = df_filt[df_filt['Area'].isin(f_area)]
 if f_equipo: df_filt = df_filt[df_filt['Equipo'].isin(f_equipo)]
@@ -113,7 +108,7 @@ if f_nombre: df_filt = df_filt[df_filt['Nombre'].isin(f_nombre)]
 # --- DASHBOARD PRINCIPAL ---
 st.title("📊 Control de Asistencia")
 
-# Métricas Principales (Dinámicas según filtros)
+# Métricas
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Total Registros", len(df_filt))
 m2.metric("Presentes", len(df_filt[df_filt['Estado'] == 'Presente']))
@@ -122,36 +117,35 @@ m4.metric("OOO", len(df_filt[df_filt['Estado'] == 'OOO']))
 
 st.markdown("---")
 
-# Gráficos
-col_left, col_right = st.columns(2)
+# Fila 1: Distribución y Equipos
+c1, c2 = st.columns(2)
 
-with col_left:
+with c1:
     st.subheader("Distribución General")
-    fig_pie = px.pie(
-        df_filt, 
-        names='Estado', 
-        hole=0.4,
-        color_discrete_sequence=px.colors.qualitative.Pastel
-    )
+    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
     st.plotly_chart(fig_pie, use_container_width=True)
 
-with col_right:
+with c2:
     st.subheader("Asistencia por Equipo")
-    df_bar = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
-    fig_bar = px.bar(
-        df_bar, 
-        x='Equipo', 
-        y='Cantidad', 
-        color='Estado', 
-        barmode='group'
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    df_bar_team = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
+    fig_bar_team = px.bar(df_bar_team, x='Equipo', y='Cantidad', color='Estado', barmode='group')
+    st.plotly_chart(fig_bar_team, use_container_width=True)
+
+# Fila 2: Gráfico por Área (Nuevo)
+st.markdown("---")
+st.subheader("🏢 Asistencia por Área")
+df_bar_area = df_filt.groupby(['Area', 'Estado']).size().reset_index(name='Cantidad')
+fig_bar_area = px.bar(
+    df_bar_area, 
+    x='Area', 
+    y='Cantidad', 
+    color='Estado', 
+    barmode='group',
+    color_discrete_sequence=px.colors.qualitative.Safe
+)
+st.plotly_chart(fig_bar_area, use_container_width=True)
 
 # Tabla de Detalle
 st.markdown("---")
 st.subheader("📋 Detalle de Registros")
-st.dataframe(
-    df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']], 
-    use_container_width=True,
-    hide_index=True
-)
+st.dataframe(df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']], use_container_width=True, hide_index=True)
