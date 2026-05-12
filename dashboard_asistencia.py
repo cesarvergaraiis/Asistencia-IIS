@@ -25,7 +25,7 @@ def load_data():
     df_personas = pd.read_csv(url_personas)
     
     # Columnas: Fecha (C=2), Personas (E=4 hasta BU=72), saltando AB (27)
-    indices_personas = [i for i in range(4, 73) if i != 27]
+    indices_personas = [i for i in range(4, 74) if i != 27]
     cols_interes = [2] + indices_personas
     
     df_asistencia = df_raw_asistencia.iloc[:, cols_interes].copy()
