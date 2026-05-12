@@ -7,6 +7,13 @@ from datetime import datetime
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Dashboard Asistencia", layout="wide")
 
+COLOR_MAP = {
+    "Presente": "#28a745",              # Verde
+    "Remoto autorizado": "#007bff",     # Azul
+    "Remoto no justificado": "#dc3545", # Rojo
+    "OOO": "#6c757d"                    # Gris
+}
+
 # --- FUNCIONES DE CARGA Y LIMPIEZA ---
 @st.cache_data
 def load_data():
@@ -122,7 +129,7 @@ c1, c2 = st.columns(2)
 
 with c1:
     st.subheader("Distribución General")
-    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, color_discrete_sequence=px.colors.qualitative.Set2)
+    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, color_discrete_map = COLOR_MAP)
     st.plotly_chart(fig_pie, use_container_width=True)
 
 with c2:
