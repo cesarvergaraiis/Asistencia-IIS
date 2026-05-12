@@ -128,7 +128,7 @@ with c1:
 with c2:
     st.subheader("Asistencia por Equipo")
     df_bar_team = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
-    fig_bar_team = px.bar(df_bar_team, x='Equipo', y='Cantidad', color='Estado', barmode='group')
+    fig_bar_team = px.bar(df_bar_team, x='Equipo', y='Cantidad', color='Estado', barmode='group',color_discrete_sequence=px.colors.qualitative.Pastel)
     st.plotly_chart(fig_bar_team, use_container_width=True)
 
 # Fila 2: Gráfico por Área (Nuevo)
