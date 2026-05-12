@@ -141,7 +141,7 @@ fig_bar_area = px.bar(
     y='Cantidad', 
     color='Estado', 
     barmode='group',
-    color_discrete_sequence=px.colors.qualitative.D3
+    color_discrete_sequence=px.colors.qualitative.Set1
 )
 st.plotly_chart(fig_bar_area, use_container_width=True)
 
