@@ -122,13 +122,13 @@ c1, c2 = st.columns(2)
 
 with c1:
     st.subheader("Distribución General")
-    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, color_discrete_sequence=px.colors.qualitative.Dark24)
     st.plotly_chart(fig_pie, use_container_width=True)
 
 with c2:
     st.subheader("Asistencia por Equipo")
     df_bar_team = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
-    fig_bar_team = px.bar(df_bar_team, x='Equipo', y='Cantidad', color='Estado', barmode='group',color_discrete_sequence=px.colors.qualitative.Pastel)
+    fig_bar_team = px.bar(df_bar_team, x='Equipo', y='Cantidad', color='Estado', barmode='group',color_discrete_sequence=px.colors.qualitative.Dark24)
     st.plotly_chart(fig_bar_team, use_container_width=True)
 
 # Fila 2: Gráfico por Área (Nuevo)
@@ -141,7 +141,7 @@ fig_bar_area = px.bar(
     y='Cantidad', 
     color='Estado', 
     barmode='group',
-    color_discrete_sequence=px.colors.qualitative.Set1
+    color_discrete_sequence=px.colors.qualitative.Dark24
 )
 st.plotly_chart(fig_bar_area, use_container_width=True)
 
