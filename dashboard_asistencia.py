@@ -8,7 +8,7 @@ from datetime import datetime
 st.set_page_config(page_title="Dashboard Asistencia", layout="wide")
 
 COLOR_MAP = {
-    "Presente": "#2CCC25",              # Verde
+    "Presente": "#42F53B",              # Verde
     "Remoto autorizado": "#007bff",     # Azul
     "Remoto no justificado": "#dc3545", # Rojo
     "OOO": "#6c757d"                    # Gris
