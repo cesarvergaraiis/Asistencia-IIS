@@ -129,7 +129,7 @@ c1, c2 = st.columns(2)
 
 with c1:
     st.subheader("Distribución General")
-    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, color_discrete_map=COLOR_MAP)
+    fig_pie = px.pie(df_filt, names='Estado', hole=0.4,color='Estado', color_discrete_map=COLOR_MAP)
     st.plotly_chart(fig_pie, use_container_width=True)
 
 with c2:
