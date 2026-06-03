@@ -88,7 +88,7 @@ st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 fecha_sel = st.sidebar.date_input(
     "Rango de Fechas", 
     value=st.session_state.get("f_fecha", (min_date, max_date)),
-    key="f_fecha"
+    key="f_fecha", format="DD/MM/YYYY"
 )
 
 def multiselect_filter(label, column, key):
