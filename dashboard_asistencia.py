@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Dashboard Asistencia", layout="wide")
+st.set_page_config(page_title="Asistencia", layout="wide")
 
 COLOR_MAP = {
     "Presente": "#63F549",              # Verde
