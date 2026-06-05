@@ -6,7 +6,7 @@ from datetime import datetime
 
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Asistencia", layout="wide")
-
+page_icon="📖"
 COLOR_MAP = {
     "Presente": "#63F549",              # Verde
     "Remoto autorizado": "#007bff",     # Azul
