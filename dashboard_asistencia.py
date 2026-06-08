@@ -94,13 +94,13 @@ with col_btn2:
         st.cache_data.clear()
         st.rerun() # Fuerza a la app a volver a ejecutarse con la caché limpia
         
-st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 
 fecha_sel = st.sidebar.date_input(
     "Rango de Fechas", 
     value=st.session_state.get("f_fecha", (min_date, max_date)),
     key="f_fecha", format="DD/MM/YYYY"
 )
+st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 
 def multiselect_filter(label, column, key):
     options = sorted(df[column].unique().tolist())
