@@ -83,6 +83,17 @@ def reset_filtros():
 
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Filtros")
+
+# Creamos dos columnas para que los botones queden ordenados en el sidebar
+col_btn1, col_btn2 = st.sidebar.columns(2)
+with col_btn1:
+    st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
+with col_btn2:
+    # Este es el botón clave que limpia la caché y fuerza la relectura
+    if st.sidebar.button("🔄 Actualizar Datos"):
+        st.cache_data.clear()
+        st.rerun() # Fuerza a la app a volver a ejecutarse con la caché limpia
+        
 st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 
 fecha_sel = st.sidebar.date_input(
