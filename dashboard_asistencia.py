@@ -100,7 +100,6 @@ fecha_sel = st.sidebar.date_input(
     value=st.session_state.get("f_fecha", (min_date, max_date)),
     key="f_fecha", format="DD/MM/YYYY"
 )
-st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 
 def multiselect_filter(label, column, key):
     options = sorted(df[column].unique().tolist())
