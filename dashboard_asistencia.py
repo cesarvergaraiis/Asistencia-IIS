@@ -130,7 +130,7 @@ if st.button("🔄 Actualizar Datos"):
     # O puedes usar: cargar_datos.clear() para limpiar solo esta función
     st.rerun() # Fuerza a Streamlit a volver a ejecutar el script inmediatamente
 
-df = cargar_datos(sheet_url)
+df = cargar_datos(url_asistencia)
 st.dataframe(df)
 
 # Fila 1: Distribución y Equipos
