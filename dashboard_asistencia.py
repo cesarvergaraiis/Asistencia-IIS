@@ -124,15 +124,6 @@ m4.metric("OOO", len(df_filt[df_filt['Estado'] == 'OOO']))
 
 st.markdown("---")
 
-url_asistencia = f"https://docs.google.com/spreadsheets/d/1H6aWDWu-9wHbEd1iUIrb0tkIMf5S_7xkgrx7YSQbo8c/export?format=csv&gid=215689985"
-# Botón para limpiar el caché de ESTA función específica
-if st.button("🔄 Actualizar Datos"):
-    st.cache_data.clear() # Esto limpia TODO el caché de st.cache_data
-    # O puedes usar: cargar_datos.clear() para limpiar solo esta función
-    st.rerun() # Fuerza a Streamlit a volver a ejecutar el script inmediatamente
-
-df = cargar_datos(url_asistencia)
-st.dataframe(df)
 
 # Fila 1: Distribución y Equipos
 c1, c2 = st.columns(2)
