@@ -85,15 +85,13 @@ def reset_filtros():
 # --- SIDEBAR ---
 st.sidebar.header("🔍 Filtros")
 
-# Creamos dos columnas para que los botones queden ordenados en el sidebar
 col_btn1, col_btn2 = st.sidebar.columns(2)
 with col_btn1:
     st.sidebar.button("Restablecer Filtros", on_click=reset_filtros, type="primary")
 with col_btn2:
-    # Este es el botón clave que limpia la caché y fuerza la relectura
     if st.sidebar.button("🔄 Actualizar Datos"):
         st.cache_data.clear()
-        st.rerun() # Fuerza a la app a volver a ejecutarse con la caché limpia
+        st.rerun()
         
 
 fecha_sel = st.sidebar.date_input(
@@ -126,12 +124,37 @@ if f_nombre: df_filt = df_filt[df_filt['Nombre'].isin(f_nombre)]
 # --- DASHBOARD PRINCIPAL ---
 st.title("📊 Control de Asistencia")
 
-# Métricas
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Total Registros", len(df_filt))
-m2.metric("Presentes", len(df_filt[df_filt['Estado'] == 'Presente']))
-m3.metric("Remotos", len(df_filt[df_filt['Estado'].str.contains('Remoto', na=False)]))
-m4.metric("OOO", len(df_filt[df_filt['Estado'] == 'OOO']))
+# --- NUEVA LÓGICA DE INDICADORES DE PROMEDIO ---
+total_regs = len(df_filt)
+if total_regs > 0:
+    cant_presente = len(df_filt[df_filt['Estado'] == 'Presente'])
+    cant_remoto_aut = len(df_filt[df_filt['Estado'] == 'Remoto autorizado'])
+    cant_remoto_no_just = len(df_filt[df_filt['Estado'] == 'Remoto no justificado'])
+    cant_ooo = len(df_filt[df_filt['Estado'] == 'OOO'])
+    cant_remotos_total = cant_remoto_aut + cant_remoto_no_just
+    
+    # Cálculo de Promedio de Asistencia Efectiva (Presente + Remoto Autorizado) / (Total - OOO)
+    total_laborable = total_regs - cant_ooo
+    if total_laborable > 0:
+        promedio_asistencia = ((cant_presente + cant_remoto_aut) / total_laborable) * 100
+    else:
+        promedio_asistencia = 0.0
+        
+    # Porcentajes de distribución sobre el total general
+    pct_presente = (cant_presente / total_regs) * 100
+    pct_remoto = (cant_remotos_total / total_regs) * 100
+    pct_ooo = (cant_ooo / total_regs) * 100
+else:
+    cant_presente = cant_remotos_total = cant_ooo = 0
+    promedio_asistencia = pct_presente = pct_remoto = pct_ooo = 0.0
+
+# Renderizado de las 5 columnas de métricas
+m1, m2, m3, m4, m5 = st.columns(5)
+m1.metric("Total Registros", f"{total_regs}")
+m2.metric("🎯 Promedio Asistencia", f"{promedio_asistencia:.1f}%")
+m3.metric("Presentes", f"{cant_presente} ({pct_presente:.1f}%)")
+m4.metric("Remotos", f"{cant_remotos_total} ({pct_remoto:.1f}%)")
+m5.metric("OOO", f"{cant_ooo} ({pct_ooo:.1f}%)")
 
 st.markdown("---")
 
@@ -141,16 +164,16 @@ c1, c2 = st.columns(2)
 
 with c1:
     st.subheader("Distribución General")
-    fig_pie = px.pie(df_filt, names='Estado', hole=0.4,color='Estado', color_discrete_map=COLOR_MAP)
+    fig_pie = px.pie(df_filt, names='Estado', hole=0.4, color='Estado', color_discrete_map=COLOR_MAP)
     st.plotly_chart(fig_pie, use_container_width=True)
 
 with c2:
     st.subheader("Asistencia por Equipo")
     df_bar_team = df_filt.groupby(['Equipo', 'Estado']).size().reset_index(name='Cantidad')
-    fig_bar_team = px.bar(df_bar_team, x='Equipo', y='Cantidad', color='Estado', barmode='group',color_discrete_map=COLOR_MAP)
+    fig_bar_team = px.bar(df_bar_team, x='Equipo', y='Cantidad', color='Estado', barmode='group', color_discrete_map=COLOR_MAP)
     st.plotly_chart(fig_bar_team, use_container_width=True)
 
-# Fila 2: Gráfico por Área (Nuevo)
+# Fila 2: Gráfico por Área
 st.markdown("---")
 st.subheader("🏢 Asistencia por Área")
 df_bar_area = df_filt.groupby(['Area', 'Estado']).size().reset_index(name='Cantidad')
@@ -163,6 +186,32 @@ fig_bar_area = px.bar(
     color_discrete_map=COLOR_MAP
 )
 st.plotly_chart(fig_bar_area, use_container_width=True)
+
+# --- NUEVA SECCIÓN: TASA DE ASISTENCIA PROMEDIO POR EQUIPO ---
+st.markdown("---")
+st.subheader("📈 Tasa de Asistencia Promedio por Equipo (%)")
+if total_regs > 0:
+    # Definimos los estados válidos de asistencia
+    df_filt['Es_Asistencia'] = df_filt['Estado'].isin(['Presente', 'Remoto autorizado'])
+    # Excluimos OOO para evaluar solo días laborales reales
+    df_lab = df_filt[df_filt['Estado'] != 'OOO']
+    
+    if not df_lab.empty:
+        df_prom_equipo = df_lab.groupby('Equipo')['Es_Asistencia'].mean().reset_index()
+        df_prom_equipo['% Asistencia'] = df_prom_equipo['Es_Asistencia'] * 100
+        df_prom_equipo = df_prom_equipo.sort_values(by='% Asistencia', ascending=False)
+        
+        fig_prom = px.bar(
+            df_prom_equipo, 
+            x='Equipo', 
+            y='% Asistencia', 
+            text_auto='.1f',
+            labels={'% Asistencia': 'Promedio (%)'},
+            range_y=[0, 100]
+        )
+        st.plotly_chart(fig_prom, use_container_width=True)
+    else:
+        st.info("No hay suficientes datos laborales en este rango para calcular promedios por equipo (Todos están OOO).")
 
 # Tabla de Detalle
 st.markdown("---")
