@@ -132,8 +132,8 @@ total_regs = len(df_filt)
 
 if total_regs > 0:
     # Contamos las asistencias por estado
-    cant_presente = len(df_filt[df_filt['Estado'] == 'Presente'])
-    cant_remoto_aut = len(df_filt[df_filt['Estado'] == 'Remoto autorizado'])
+    cant_presente = len(df_filt[df_filt['Estado'] == 'Presente en la oficina'])
+    cant_remoto_aut = len(df_filt[df_filt['Estado'] == 'Remoto autorizado (otra razón)']) + len(df_filt[df_filt['Estado'] == 'WFA']) + len(df_filt[df_filt['Estado'] == 'Online remoto por enfermedad'])
     cant_remoto_no_just = len(df_filt[df_filt['Estado'] == 'Remoto no justificado'])
     cant_ooo = len(df_filt[df_filt['Estado'] == 'OOO'])
     cant_remotos_total = cant_remoto_aut + cant_remoto_no_just
