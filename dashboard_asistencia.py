@@ -195,31 +195,64 @@ fig_bar_area = px.bar(
 )
 st.plotly_chart(fig_bar_area, use_container_width=True)
 
-# --- NUEVA SECCIÓN: TASA DE ASISTENCIA PROMEDIO POR EQUIPO ---
+# --- NUEVA SECCIÓN: EVOLUCIÓN DE ESTADOS POR SEMANA ---
 st.markdown("---")
-st.subheader("📈 Tasa de Asistencia Promedio por Equipo (%)")
+st.subheader("📉 Evolución de Estados por Semana")
+
 if total_regs > 0:
-    # Definimos los estados válidos de asistencia
-    df_filt['Es_Asistencia'] = df_filt['Estado'].isin(['Presente', 'Remoto autorizado'])
-    # Excluimos OOO para evaluar solo días laborales reales
-    df_lab = df_filt[df_filt['Estado'] != 'OOO']
+    # 1. Copia y conversión segura de fechas
+    df_evol = df_filt.copy()
+    df_evol['Fecha_dt'] = pd.to_datetime(df_evol['Fecha'])
     
-    if not df_lab.empty:
-        df_prom_equipo = df_lab.groupby('Equipo')['Es_Asistencia'].mean().reset_index()
-        df_prom_equipo['% Asistencia'] = df_prom_equipo['Es_Asistencia'] * 100
-        df_prom_equipo = df_prom_equipo.sort_values(by='% Asistencia', ascending=False)
+    # 2. Agrupar por semana (lunes) usando timedelta para evitar errores en Pandas 2.0+
+    df_evol['Semana'] = df_evol['Fecha_dt'] - pd.to_timedelta(df_evol['Fecha_dt'].dt.weekday, unit='D')
+    df_weekly = df_evol.groupby(['Semana', 'Estado']).size().reset_index(name='Cantidad')
+    
+    # 3. Crear el gráfico de líneas
+    fig_line = px.line(
+        df_weekly,
+        x='Semana',
+        y='Cantidad',
+        color='Estado',
+        markers=True,
+        color_discrete_map=COLOR_MAP,
+        labels={'Semana': 'Fecha (Inicio de semana)', 'Cantidad': 'Total de Registros'}
+    )
+    
+    # 4. Generar separadores mensuales
+    min_date_dt = df_evol['Fecha_dt'].min().replace(day=1)
+    max_date_dt = df_evol['Fecha_dt'].max()
+    meses_separadores = pd.date_range(start=min_date_dt, end=max_date_dt, freq='MS')
+    
+    for mes in meses_separadores:
+        # CORRECCIÓN DEFINITIVA: Convertimos el Timestamp a milisegundos enteros (Epoch).
+        # Al ser un número entero (int), Plotly realiza sus cálculos de posición sin errores
+        # y el gráfico de fechas lo traduce visualmente al día exacto del mes.
+        ms_epoch = int(mes.value // 10**6)
         
-        fig_prom = px.bar(
-            df_prom_equipo, 
-            x='Equipo', 
-            y='% Asistencia', 
-            text_auto='.1f',
-            labels={'% Asistencia': 'Promedio (%)'},
-            range_y=[0, 100]
+        fig_line.add_vline(
+            x=ms_epoch,
+            line_width=1.5,
+            line_dash="dash",
+            line_color="rgba(150, 150, 150, 0.6)",
+            annotation_text=mes.strftime("%b %Y"),
+            annotation_position="top left",
+            annotation_font_size=10,
+            annotation_font_color="gray"
         )
-        st.plotly_chart(fig_prom, use_container_width=True)
-    else:
-        st.info("No hay suficientes datos laborales en este rango para calcular promedios por equipo (Todos están OOO).")
+    
+    # 5. Ajustes estéticos del gráfico
+    fig_line.update_layout(
+        hovermode="x unified",
+        legend_title="Estado",
+        margin=dict(t=40, b=20, l=20, r=20)
+    )
+    fig_line.update_xaxes(showgrid=False, tickformat="%d/%m/%Y")
+    fig_line.update_yaxes(showgrid=True, gridcolor="rgba(200, 200, 200, 0.2)")
+    
+    st.plotly_chart(fig_line, use_container_width=True)
+else:
+    st.info("No hay datos suficientes para mostrar la evolución semanal.")
 
 # Tabla de Detalle
 st.markdown("---")
