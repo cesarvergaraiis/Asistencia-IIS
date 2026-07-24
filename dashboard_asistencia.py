@@ -13,7 +13,7 @@ COLOR_MAP = {
     "Remoto no justificado": "#dc3545", # Rojo
     "OOO": "#6c757d",                 # Gris,
     "Online remoto por enfermedad": "#608fb8",
-    "WFA": "#b5cc41"
+    "WFA": "#bfcc7c"
 
 }
 
