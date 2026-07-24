@@ -8,10 +8,13 @@ from datetime import datetime
 st.set_page_config(page_title="Asistencia", layout="wide")
 
 COLOR_MAP = {
-    "Presente": "#63F549",              # Verde
-    "Remoto autorizado": "#007bff",     # Azul
+    "Presente en la oficina": "#63F549",              # Verde
+    "Remoto autorizado (otra razón)": "#007bff",     # Azul
     "Remoto no justificado": "#dc3545", # Rojo
-    "OOO": "#6c757d"                    # Gris
+    "OOO": "#6c757d",                 # Gris,
+    "Online remoto por enfermedad": "#608fb8",
+    "WFA": "#b5cc41"
+
 }
 
 # --- FUNCIONES DE CARGA Y LIMPIEZA ---
