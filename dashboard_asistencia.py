@@ -26,50 +26,64 @@ def load_data():
     df_raw_asistencia = pd.read_csv(url_asistencia)
     df_personas = pd.read_csv(url_personas)
     
-    # Columnas: Submitter (B=1), Fecha (C=2), Personas/Notas (E=4 hasta BU=73)
-    # Incluimos el índice 27 (columna AB / "Nota") sin saltarlo.
-    indices_personas = list(range(4, 74))
-    cols_interes = [1, 2] + indices_personas  # [1]=Submitter, [2]=Fecha
+    # Submitter (B=1), Fecha (C=2), Nota (AB=27) y Personas (E=4 en adelante)
+    idx_submitter = 1
+    idx_fecha = 2
+    idx_nota = 27  # Columna AB explícita
     
-    df_asistencia = df_raw_asistencia.iloc[:, cols_interes].copy()
+    # Tomamos la columna Submitter, Fecha, Nota y las columnas de personas
+    indices_totales = [idx_submitter, idx_fecha, idx_nota] + [i for i in range(4, df_raw_asistencia.shape[1]) if i != idx_nota]
     
-    # Limpiar nombres de columnas con Regex (solo lo que está en [...])
+    df_asistencia = df_raw_asistencia.iloc[:, indices_totales].copy()
+    
+    # Limpiar nombres de columnas
     new_cols = {}
-    for i, col in enumerate(df_asistencia.columns):
-        if i == 0:
+    for col in df_asistencia.columns:
+        col_str = str(col).strip()
+        if col == df_asistencia.columns[0]:
             new_cols[col] = "Submitter"
-        elif i == 1:
+        elif col == df_asistencia.columns[1]:
             new_cols[col] = "Fecha"
+        elif "nota" in col_str.lower():
+            new_cols[col] = "Nota"
         else:
-            match = re.search(r'\[(.*?)\]', str(col))
+            match = re.search(r'\[(.*?)\]', col_str)
             new_cols[col] = match.group(1) if match else f"SKIP_{col}"
     
     df_asistencia = df_asistencia.rename(columns=new_cols)
     df_asistencia = df_asistencia.loc[:, ~df_asistencia.columns.str.startswith('SKIP_')]
     
-    # Transformar a formato largo (Melt), manteniendo 'Submitter' y 'Fecha'
-    df_melted = df_asistencia.melt(id_vars=["Submitter", "Fecha"], var_name="Nombre", value_name="Estado")
+    # Separar la columna 'Nota' antes de hacer melt para que no interfiera con los nombres de personas
+    col_nota = df_asistencia[['Submitter', 'Fecha', 'Nota']].copy() if 'Nota' in df_asistencia.columns else pd.DataFrame()
     
-    # LIMPIEZA DE DATOS
+    # Quitar 'Nota' de las columnas a transformar (Melt)
+    cols_asistencia = [c for c in df_asistencia.columns if c != 'Nota']
+    df_melted = df_asistencia[cols_asistencia].melt(id_vars=["Submitter", "Fecha"], var_name="Nombre", value_name="Estado")
+    
+    # Limpieza general de asistencia
     df_melted = df_melted.dropna(subset=["Estado"])
     df_melted = df_melted[df_melted["Estado"].astype(str).str.strip() != ""]
-    
-    # Limpiar y convertir Fechas
     df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha'], errors='coerce').dt.date
     df_melted = df_melted.dropna(subset=["Fecha"])
     
-    # UNIR CON MAESTRO DE PERSONAS
+    # Limpieza de Notas
+    if not col_nota.empty:
+        col_nota['Fecha'] = pd.to_datetime(col_nota['Fecha'], errors='coerce').dt.date
+        col_nota = col_nota.dropna(subset=["Fecha", "Nota"])
+        col_nota = col_nota[col_nota["Nota"].astype(str).str.strip() != ""]
+    
+    # Unir asistencia con Maestro de Personas
     df_final = pd.merge(df_melted, df_personas, on="Nombre", how="left")
     
     for col in ['Area', 'Equipo', 'País']:
         if col in df_final.columns:
             df_final[col] = df_final[col].fillna("No definido")
             
-    return df_final
+    return df_final, col_nota
 
 # Cargar los datos
 try:
-    df = load_data()
+    df, df_notas_raw = load_data()
     page_icon = "📖"
 except Exception as e:
     st.error(f"Error al conectar con Google Sheets: {e}")
@@ -115,10 +129,7 @@ f_equipo = multiselect_filter("Equipo", "Equipo", "f_equipo")
 f_nombre = multiselect_filter("Nombre", "Nombre", "f_nombre")
 
 # APLICAR FILTROS
-# Para las métricas y gráficos principales excluimos el 'Nombre' "Nota"
-df_asistencia_only = df[df['Nombre'] != 'Nota'].copy()
-
-df_filt = df_asistencia_only.copy()
+df_filt = df.copy()
 if isinstance(fecha_sel, tuple) and len(fecha_sel) == 2:
     df_filt = df_filt[(df_filt['Fecha'] >= fecha_sel[0]) & (df_filt['Fecha'] <= fecha_sel[1])]
 
@@ -260,22 +271,21 @@ st.dataframe(
 st.markdown("---")
 st.subheader("📝 Detalle de Notas")
 
-# Filtrar únicamente los registros correspondientes a "Nota"
-df_notas = df[df['Nombre'] == 'Nota'].copy()
+df_notas_filt = df_notas_raw.copy()
 
-# Aplicar el filtro por fecha si está seleccionado
+# Aplicar filtro de fecha sobre la tabla de notas
 if isinstance(fecha_sel, tuple) and len(fecha_sel) == 2:
-    df_notas = df_notas[(df_notas['Fecha'] >= fecha_sel[0]) & (df_notas['Fecha'] <= fecha_sel[1])]
+    df_notas_filt = df_notas_filt[
+        (df_notas_filt['Fecha'] >= fecha_sel[0]) & 
+        (df_notas_filt['Fecha'] <= fecha_sel[1])
+    ]
 
-# Renombrar 'Estado' a 'Nota' para mejor claridad en la interfaz
-df_notas = df_notas.rename(columns={'Estado': 'Nota'})
+# Eliminar duplicados si los hubiera
+df_notas_filt = df_notas_filt.drop_duplicates()
 
-# Eliminar duplicados o notas vacías
-df_notas = df_notas[['Submitter', 'Fecha', 'Nota']].drop_duplicates().dropna(subset=['Nota'])
-
-if not df_notas.empty:
+if not df_notas_filt.empty:
     st.dataframe(
-        df_notas,
+        df_notas_filt[['Submitter', 'Fecha', 'Nota']],
         column_config={
             "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
             "Submitter": st.column_config.TextColumn("Submitter"),
