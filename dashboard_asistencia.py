@@ -8,13 +8,12 @@ from datetime import datetime
 st.set_page_config(page_title="Asistencia", layout="wide")
 
 COLOR_MAP = {
-    "Presente en la oficina": "#63F549",              # Verde
+    "Presente en la oficina": "#63F549",             # Verde
     "Remoto autorizado (otra razón)": "#007bff",     # Azul
     "Remoto no justificado": "#dc3545", # Rojo
     "OOO": "#6c757d",                 # Gris,
     "Online remoto por enfermedad": "#608fb8",
     "WFA": "#bfcc7c"
-
 }
 
 # --- FUNCIONES DE CARGA Y LIMPIEZA ---
@@ -27,16 +26,19 @@ def load_data():
     df_raw_asistencia = pd.read_csv(url_asistencia)
     df_personas = pd.read_csv(url_personas)
     
-    # Columnas: Fecha (C=2), Personas (E=4 hasta BU=72), saltando AB (27)
-    indices_personas = [i for i in range(4, 74) if i != 27]
-    cols_interes = [2] + indices_personas
+    # Columnas: Submitter (B=1), Fecha (C=2), Personas/Notas (E=4 hasta BU=73)
+    # Incluimos el índice 27 (columna AB / "Nota") sin saltarlo.
+    indices_personas = list(range(4, 74))
+    cols_interes = [1, 2] + indices_personas  # [1]=Submitter, [2]=Fecha
     
     df_asistencia = df_raw_asistencia.iloc[:, cols_interes].copy()
     
     # Limpiar nombres de columnas con Regex (solo lo que está en [...])
     new_cols = {}
-    for col in df_asistencia.columns:
-        if col == df_asistencia.columns[0]:
+    for i, col in enumerate(df_asistencia.columns):
+        if i == 0:
+            new_cols[col] = "Submitter"
+        elif i == 1:
             new_cols[col] = "Fecha"
         else:
             match = re.search(r'\[(.*?)\]', str(col))
@@ -45,12 +47,12 @@ def load_data():
     df_asistencia = df_asistencia.rename(columns=new_cols)
     df_asistencia = df_asistencia.loc[:, ~df_asistencia.columns.str.startswith('SKIP_')]
     
-    # Transformar a formato largo (Melt)
-    df_melted = df_asistencia.melt(id_vars=["Fecha"], var_name="Nombre", value_name="Estado")
+    # Transformar a formato largo (Melt), manteniendo 'Submitter' y 'Fecha'
+    df_melted = df_asistencia.melt(id_vars=["Submitter", "Fecha"], var_name="Nombre", value_name="Estado")
     
     # LIMPIEZA DE DATOS
     df_melted = df_melted.dropna(subset=["Estado"])
-    df_melted = df_melted[df_melted["Estado"].str.strip() != ""]
+    df_melted = df_melted[df_melted["Estado"].astype(str).str.strip() != ""]
     
     # Limpiar y convertir Fechas
     df_melted['Fecha'] = pd.to_datetime(df_melted['Fecha'], errors='coerce').dt.date
@@ -68,7 +70,7 @@ def load_data():
 # Cargar los datos
 try:
     df = load_data()
-    page_icon="📖"
+    page_icon = "📖"
 except Exception as e:
     st.error(f"Error al conectar con Google Sheets: {e}")
     st.stop()
@@ -95,7 +97,6 @@ with col_btn2:
     if st.sidebar.button("🔄 Actualizar Datos"):
         st.cache_data.clear()
         st.rerun()
-        
 
 fecha_sel = st.sidebar.date_input(
     "Rango de Fechas", 
@@ -114,7 +115,10 @@ f_equipo = multiselect_filter("Equipo", "Equipo", "f_equipo")
 f_nombre = multiselect_filter("Nombre", "Nombre", "f_nombre")
 
 # APLICAR FILTROS
-df_filt = df.copy()
+# Para las métricas y gráficos principales excluimos el 'Nombre' "Nota"
+df_asistencia_only = df[df['Nombre'] != 'Nota'].copy()
+
+df_filt = df_asistencia_only.copy()
 if isinstance(fecha_sel, tuple) and len(fecha_sel) == 2:
     df_filt = df_filt[(df_filt['Fecha'] >= fecha_sel[0]) & (df_filt['Fecha'] <= fecha_sel[1])]
 
@@ -127,27 +131,23 @@ if f_nombre: df_filt = df_filt[df_filt['Nombre'].isin(f_nombre)]
 # --- DASHBOARD PRINCIPAL ---
 st.title("📊 Control de Asistencia")
 
-# --- NUEVA LÓGICA DE INDICADORES (VALOR ABSOLUTO DE PRESENTES) ---
+# --- INDICADORES ---
 total_regs = len(df_filt)
 
 if total_regs > 0:
-    # Contamos las asistencias por estado
     cant_presente = len(df_filt[df_filt['Estado'] == 'Presente en la oficina'])
     cant_remoto_aut = len(df_filt[df_filt['Estado'] == 'Remoto autorizado (otra razón)']) + len(df_filt[df_filt['Estado'] == 'WFA']) + len(df_filt[df_filt['Estado'] == 'Online remoto por enfermedad'])
     cant_remoto_no_just = len(df_filt[df_filt['Estado'] == 'Remoto no justificado'])
     cant_ooo = len(df_filt[df_filt['Estado'] == 'OOO'])
     cant_remotos_total = cant_remoto_aut + cant_remoto_no_just
     
-    # Cantidad de días únicos con registros en el set filtrado
     dias_unicos = df_filt['Fecha'].nunique()
     
-    # Promedio diario de personas "Presente" (Valor absoluto)
     if dias_unicos > 0:
         promedio_diario_presente = cant_presente / dias_unicos
     else:
         promedio_diario_presente = 0.0
         
-    # Porcentajes de distribución sobre el total general (para las tarjetas)
     pct_presente = (cant_presente / total_regs) * 100
     pct_remoto = (cant_remotos_total / total_regs) * 100
     pct_ooo = (cant_ooo / total_regs) * 100
@@ -156,16 +156,14 @@ else:
     promedio_diario_presente = pct_presente = pct_remoto = pct_ooo = 0.0
     dias_unicos = 0
 
-# Renderizado de las 5 columnas de métricas
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("Total Registros", f"{total_regs}")
-m2.metric("👤 Promedio Presentes/Día", f"{promedio_diario_presente:.1f}") # Valor absoluto (ej: 14.3 personas)
+m2.metric("👤 Promedio Presentes/Día", f"{promedio_diario_presente:.1f}")
 m3.metric("Presentes (Total)", f"{cant_presente} ({pct_presente:.1f}%)")
 m4.metric("Remotos", f"{cant_remotos_total} ({pct_remoto:.1f}%)")
 m5.metric("OOO", f"{cant_ooo} ({pct_ooo:.1f}%)")
 
 st.markdown("---")
-
 
 # Fila 1: Distribución y Equipos
 c1, c2 = st.columns(2)
@@ -195,20 +193,17 @@ fig_bar_area = px.bar(
 )
 st.plotly_chart(fig_bar_area, use_container_width=True)
 
-# --- NUEVA SECCIÓN: EVOLUCIÓN DE ESTADOS POR SEMANA ---
+# --- EVOLUCIÓN DE ESTADOS POR SEMANA ---
 st.markdown("---")
 st.subheader("📉 Evolución de Estados por Semana")
 
 if total_regs > 0:
-    # 1. Copia y conversión segura de fechas
     df_evol = df_filt.copy()
     df_evol['Fecha_dt'] = pd.to_datetime(df_evol['Fecha'])
     
-    # 2. Agrupar por semana (lunes) usando timedelta para evitar errores en Pandas 2.0+
     df_evol['Semana'] = df_evol['Fecha_dt'] - pd.to_timedelta(df_evol['Fecha_dt'].dt.weekday, unit='D')
     df_weekly = df_evol.groupby(['Semana', 'Estado']).size().reset_index(name='Cantidad')
     
-    # 3. Crear el gráfico de líneas
     fig_line = px.line(
         df_weekly,
         x='Semana',
@@ -219,15 +214,11 @@ if total_regs > 0:
         labels={'Semana': 'Fecha (Inicio de semana)', 'Cantidad': 'Total de Registros'}
     )
     
-    # 4. Generar separadores mensuales
     min_date_dt = df_evol['Fecha_dt'].min().replace(day=1)
     max_date_dt = df_evol['Fecha_dt'].max()
     meses_separadores = pd.date_range(start=min_date_dt, end=max_date_dt, freq='MS')
     
     for mes in meses_separadores:
-        # CORRECCIÓN DEFINITIVA: Convertimos el Timestamp a milisegundos enteros (Epoch).
-        # Al ser un número entero (int), Plotly realiza sus cálculos de posición sin errores
-        # y el gráfico de fechas lo traduce visualmente al día exacto del mes.
         ms_epoch = int(mes.value // 10**6)
         
         fig_line.add_vline(
@@ -241,7 +232,6 @@ if total_regs > 0:
             annotation_font_color="gray"
         )
     
-    # 5. Ajustes estéticos del gráfico
     fig_line.update_layout(
         hovermode="x unified",
         legend_title="Estado",
@@ -254,17 +244,45 @@ if total_regs > 0:
 else:
     st.info("No hay datos suficientes para mostrar la evolución semanal.")
 
-# Tabla de Detalle
+# --- TABLA 1: DETALLE DE REGISTROS ---
 st.markdown("---")
 st.subheader("📋 Detalle de Registros")
 st.dataframe(
-    df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']],
+    df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']], 
     column_config={
-        "Fecha": st.column_config.DateColumn(
-            "Fecha",
-            format="DD/MM/YYYY"
-        )
+        "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
     },
-    use_container_width=True,
+    use_container_width=True, 
     hide_index=True
 )
+
+# --- TABLA 2: DETALLE DE NOTAS ---
+st.markdown("---")
+st.subheader("📝 Detalle de Notas")
+
+# Filtrar únicamente los registros correspondientes a "Nota"
+df_notas = df[df['Nombre'] == 'Nota'].copy()
+
+# Aplicar el filtro por fecha si está seleccionado
+if isinstance(fecha_sel, tuple) and len(fecha_sel) == 2:
+    df_notas = df_notas[(df_notas['Fecha'] >= fecha_sel[0]) & (df_notas['Fecha'] <= fecha_sel[1])]
+
+# Renombrar 'Estado' a 'Nota' para mejor claridad en la interfaz
+df_notas = df_notas.rename(columns={'Estado': 'Nota'})
+
+# Eliminar duplicados o notas vacías
+df_notas = df_notas[['Submitter', 'Fecha', 'Nota']].drop_duplicates().dropna(subset=['Nota'])
+
+if not df_notas.empty:
+    st.dataframe(
+        df_notas,
+        column_config={
+            "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+            "Submitter": st.column_config.TextColumn("Submitter"),
+            "Nota": st.column_config.TextColumn("Nota")
+        },
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.info("No hay notas registradas para el rango de fechas seleccionado.")
