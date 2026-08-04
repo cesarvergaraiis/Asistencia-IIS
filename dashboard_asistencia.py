@@ -257,4 +257,14 @@ else:
 # Tabla de Detalle
 st.markdown("---")
 st.subheader("📋 Detalle de Registros")
-st.dataframe(df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']], use_container_width=True, hide_index=True)
+st.dataframe(
+    df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']],
+    column_config={
+        "Fecha": st.column_config.DateColumn(
+            "Fecha",
+            format="DD/MM/YYYY"
+        )
+    },
+    use_container_width=True,
+    hide_index=True
+)
