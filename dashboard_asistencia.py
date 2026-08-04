@@ -257,5 +257,4 @@ else:
 # Tabla de Detalle
 st.markdown("---")
 st.subheader("📋 Detalle de Registros")
-st.dataframe(df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']], 
-            df_filt.style.format({'Fecha': lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '-'}),use_container_width=True, hide_index=True)
+st.dataframe(df_filt[['Fecha', 'Nombre', 'Estado', 'Area', 'Equipo', 'País']], use_container_width=True, hide_index=True)
