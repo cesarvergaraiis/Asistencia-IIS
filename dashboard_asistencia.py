@@ -201,86 +201,97 @@ with tab_resumen:
     )
 
 # ==========================================
-# PESTAÑA NUEVA: REGISTROS POR SEMANA Y EQUIPO
+# PESTAÑA: REGISTROS POR SEMANA Y EQUIPO
 # ==========================================
 with tab_semana_equipo:
-    st.subheader("🗓️ Distribución de Registros por Semana y Equipo")
+    st.subheader("🗓️ Control Semanal de Registros por Equipo")
+    st.caption("Usa esta pestaña para verificar si algún equipo omitió realizar registros en semanas específicas.")
     
     if len(df_filt) > 0:
         df_se = df_filt.copy()
         df_se['Fecha_dt'] = pd.to_datetime(df_se['Fecha'])
         
-        # Calcular el inicio de semana (Lunes) y formatearlo
+        # Calcular la fecha del inicio de semana (Lunes)
         df_se['Inicio_Semana_dt'] = df_se['Fecha_dt'] - pd.to_timedelta(df_se['Fecha_dt'].dt.weekday, unit='D')
-        df_se['Semana_Label'] = df_se['Inicio_Semana_dt'].dt.strftime('%d/%m/%Y')
         
-        # Opciones para filtrar tipo de estado a contabilizar
-        col_filtro1, col_filtro2 = st.columns([2, 2])
-        with col_filtro1:
-            modo_conteo = st.radio(
-                "Mostrar conteo de:",
-                ["Todos los Estados", "Solo 'Presente en la oficina'"],
-                horizontal=True
-            )
+        modo_conteo = st.radio(
+            "Filtrar por tipo de registro:",
+            ["Todos los Estados (Evaluación de cumplimiento)", "Solo 'Presente en la oficina'"],
+            horizontal=True
+        )
         
         df_se_filtered = df_se.copy()
         if modo_conteo == "Solo 'Presente en la oficina'":
             df_se_filtered = df_se_filtered[df_se_filtered['Estado'] == 'Presente en la oficina']
 
-        # Agrupar por Semana y Equipo
-        df_grouped = df_se_filtered.groupby(['Inicio_Semana_dt', 'Semana_Label', 'Equipo']).size().reset_index(name='Registros')
+        # 1. Obtener todas las semanas y equipos del universo filtrado (ordenados cronológicamente)
+        semanas_unicas = sorted(df_se['Inicio_Semana_dt'].unique())
+        equipos_unicos = sorted(df['Equipo'].unique()) if not f_equipo else sorted(f_equipo)
         
-        # --- 1. MATRIZ / HEATMAP ---
+        # Crear matriz completa (MultiIndex) de todas las combinaciones posibles Semana x Equipo
+        idx = pd.MultiIndex.from_product([semanas_unicas, equipos_unicos], names=['Inicio_Semana_dt', 'Equipo'])
+        
+        # Agrupar registros reales
+        df_grouped = df_se_filtered.groupby(['Inicio_Semana_dt', 'Equipo']).size().reindex(idx, fill_value=0).reset_index(name='Registros')
+        
+        # Formatear la fecha como string para mantener el orden estricto de fechas en el eje X
+        df_grouped['Semana_Label'] = df_grouped['Inicio_Semana_dt'].dt.strftime('%d/%m/%Y')
+        semanas_ordenadas_labels = [d.strftime('%d/%m/%Y') for d in semanas_unicas]
+
+        # Pivote para heatmap y tabla (manteniendo orden explícito de columnas)
+        pivot_se = df_grouped.pivot(index='Equipo', columns='Semana_Label', values='Registros').fillna(0)
+        pivot_se = pivot_se.reindex(columns=semanas_ordenadas_labels)
+
+        # --- 1. HEATMAP MAPA DE CALOR ---
         st.markdown("---")
-        st.write("#### 🟩 Mapa de Calor (Heatmap): Semanas vs. Equipos")
+        st.write("#### 🟩 Mapa de Calor (Semanas Cronológicas vs. Equipos)")
         
-        if not df_grouped.empty:
-            pivot_se = df_grouped.pivot(index='Equipo', columns='Semana_Label', values='Registros').fillna(0)
-            
-            fig_hm_se = px.imshow(
-                pivot_se,
-                text_auto=True,
-                color_continuous_scale="Blues",
-                labels=dict(x="Semana (Inicio)", y="Equipo", color="Total Registros"),
-                aspect="auto"
+        fig_hm_se = px.imshow(
+            pivot_se,
+            text_auto=True,
+            color_continuous_scale="Reds_r" if modo_conteo == "Todos los Estados (Evaluación de cumplimiento)" else "Greens",
+            labels=dict(x="Semana (Inicio Lunes)", y="Equipo", color="Cantidad Registros"),
+            aspect="auto"
+        )
+        # Forzar el orden estricto cronológico en el eje X
+        fig_hm_se.update_xaxes(type='category', categoryorder='array', categoryarray=semanas_ordenadas_labels, side="bottom")
+        st.plotly_chart(fig_hm_se, use_container_width=True)
+        
+        # --- 2. GRÁFICOS COMPLEMENTARIOS ---
+        st.markdown("---")
+        c_se1, c_se2 = st.columns(2)
+        
+        with c_se1:
+            st.write("#### 📊 Volumen Semanal Apilado por Equipo")
+            fig_bar_se = px.bar(
+                df_grouped,
+                x='Semana_Label',
+                y='Registros',
+                color='Equipo',
+                barmode='stack',
+                labels={'Semana_Label': 'Semana', 'Registros': 'Cantidad'}
             )
-            fig_hm_se.update_xaxes(side="bottom")
-            st.plotly_chart(fig_hm_se, use_container_width=True)
+            fig_bar_se.update_xaxes(type='category', categoryorder='array', categoryarray=semanas_ordenadas_labels)
+            st.plotly_chart(fig_bar_se, use_container_width=True)
             
-            # --- 2. BARRAS APILADAS Y DE LÍNEA ---
-            st.markdown("---")
-            c_se1, c_se2 = st.columns(2)
+        with c_se2:
+            st.write("#### 📈 Evolución por Equipo")
+            fig_line_se = px.line(
+                df_grouped,
+                x='Semana_Label',
+                y='Registros',
+                color='Equipo',
+                markers=True,
+                labels={'Semana_Label': 'Semana', 'Registros': 'Cantidad'}
+            )
+            fig_line_se.update_xaxes(type='category', categoryorder='array', categoryarray=semanas_ordenadas_labels)
+            st.plotly_chart(fig_line_se, use_container_width=True)
             
-            with c_se1:
-                st.write("#### 📊 Volumen Semanal por Equipo")
-                fig_bar_se = px.bar(
-                    df_grouped,
-                    x='Semana_Label',
-                    y='Registros',
-                    color='Equipo',
-                    barmode='stack',
-                    labels={'Semana_Label': 'Semana', 'Registros': 'Cantidad'}
-                )
-                st.plotly_chart(fig_bar_se, use_container_width=True)
-                
-            with c_se2:
-                st.write("#### 📈 Tendencia por Equipo")
-                fig_line_se = px.line(
-                    df_grouped,
-                    x='Semana_Label',
-                    y='Registros',
-                    color='Equipo',
-                    markers=True,
-                    labels={'Semana_Label': 'Semana', 'Registros': 'Cantidad'}
-                )
-                st.plotly_chart(fig_line_se, use_container_width=True)
-                
-            # --- 3. TABLA DINÁMICA DE DETALLE ---
-            st.markdown("---")
-            st.write("#### 📋 Tabla Resumen de Registros por Semana")
-            st.dataframe(pivot_se, use_container_width=True)
-        else:
-            st.info("No hay datos para mostrar con las condiciones seleccionadas.")
+        # --- 3. TABLA RESUMEN EN ORDEN CHRONOLÓGICO ---
+        st.markdown("---")
+        st.write("#### 📋 Tabla Resumen de Registros por Semana (Matriz de Control)")
+        st.dataframe(pivot_se, use_container_width=True)
+
     else:
         st.info("No hay suficiente información en el rango de fechas actual.")
 
