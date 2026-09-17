@@ -133,8 +133,9 @@ if f_nombre: df_filt = df_filt[df_filt['Nombre'].isin(f_nombre)]
 # --- ESTRUCTURA DE PESTAÑAS ---
 st.title("📊 Panel de Control de Asistencia Híbrida")
 
-tab_resumen, tab_individual, tab_tendencias, tab_cumplimiento, tab_notas = st.tabs([
+tab_resumen, tab_semana_equipo, tab_individual, tab_tendencias, tab_cumplimiento, tab_notas = st.tabs([
     "📊 Resumen General", 
+    "🗓️ Registros por Semana y Equipo",
     "👤 Ficha Individual", 
     "📈 Tendencias y Hábitos", 
     "🎯 Cumplimiento y Capacidad", 
@@ -200,7 +201,91 @@ with tab_resumen:
     )
 
 # ==========================================
-# PESTAÑA 2: FICHA INDIVIDUAL
+# PESTAÑA NUEVA: REGISTROS POR SEMANA Y EQUIPO
+# ==========================================
+with tab_semana_equipo:
+    st.subheader("🗓️ Distribución de Registros por Semana y Equipo")
+    
+    if len(df_filt) > 0:
+        df_se = df_filt.copy()
+        df_se['Fecha_dt'] = pd.to_datetime(df_se['Fecha'])
+        
+        # Calcular el inicio de semana (Lunes) y formatearlo
+        df_se['Inicio_Semana_dt'] = df_se['Fecha_dt'] - pd.to_timedelta(df_se['Fecha_dt'].dt.weekday, unit='D')
+        df_se['Semana_Label'] = df_se['Inicio_Semana_dt'].dt.strftime('%d/%m/%Y')
+        
+        # Opciones para filtrar tipo de estado a contabilizar
+        col_filtro1, col_filtro2 = st.columns([2, 2])
+        with col_filtro1:
+            modo_conteo = st.radio(
+                "Mostrar conteo de:",
+                ["Todos los Estados", "Solo 'Presente en la oficina'"],
+                horizontal=True
+            )
+        
+        df_se_filtered = df_se.copy()
+        if modo_conteo == "Solo 'Presente en la oficina'":
+            df_se_filtered = df_se_filtered[df_se_filtered['Estado'] == 'Presente en la oficina']
+
+        # Agrupar por Semana y Equipo
+        df_grouped = df_se_filtered.groupby(['Inicio_Semana_dt', 'Semana_Label', 'Equipo']).size().reset_index(name='Registros')
+        
+        # --- 1. MATRIZ / HEATMAP ---
+        st.markdown("---")
+        st.write("#### 🟩 Mapa de Calor (Heatmap): Semanas vs. Equipos")
+        
+        if not df_grouped.empty:
+            pivot_se = df_grouped.pivot(index='Equipo', columns='Semana_Label', values='Registros').fillna(0)
+            
+            fig_hm_se = px.imshow(
+                pivot_se,
+                text_auto=True,
+                color_continuous_scale="Blues",
+                labels=dict(x="Semana (Inicio)", y="Equipo", color="Total Registros"),
+                aspect="auto"
+            )
+            fig_hm_se.update_xaxes(side="bottom")
+            st.plotly_chart(fig_hm_se, use_container_width=True)
+            
+            # --- 2. BARRAS APILADAS Y DE LÍNEA ---
+            st.markdown("---")
+            c_se1, c_se2 = st.columns(2)
+            
+            with c_se1:
+                st.write("#### 📊 Volumen Semanal por Equipo")
+                fig_bar_se = px.bar(
+                    df_grouped,
+                    x='Semana_Label',
+                    y='Registros',
+                    color='Equipo',
+                    barmode='stack',
+                    labels={'Semana_Label': 'Semana', 'Registros': 'Cantidad'}
+                )
+                st.plotly_chart(fig_bar_se, use_container_width=True)
+                
+            with c_se2:
+                st.write("#### 📈 Tendencia por Equipo")
+                fig_line_se = px.line(
+                    df_grouped,
+                    x='Semana_Label',
+                    y='Registros',
+                    color='Equipo',
+                    markers=True,
+                    labels={'Semana_Label': 'Semana', 'Registros': 'Cantidad'}
+                )
+                st.plotly_chart(fig_line_se, use_container_width=True)
+                
+            # --- 3. TABLA DINÁMICA DE DETALLE ---
+            st.markdown("---")
+            st.write("#### 📋 Tabla Resumen de Registros por Semana")
+            st.dataframe(pivot_se, use_container_width=True)
+        else:
+            st.info("No hay datos para mostrar con las condiciones seleccionadas.")
+    else:
+        st.info("No hay suficiente información en el rango de fechas actual.")
+
+# ==========================================
+# PESTAÑA 3: FICHA INDIVIDUAL
 # ==========================================
 with tab_individual:
     st.subheader("👤 Historial e Indicadores por Colaborador")
@@ -249,7 +334,7 @@ with tab_individual:
         st.warning("No hay colaboradores disponibles con los filtros actuales.")
 
 # ==========================================
-# PESTAÑA 3: TENDENCIAS Y HÁBITOS
+# PESTAÑA 4: TENDENCIAS Y HÁBITOS
 # ==========================================
 with tab_tendencias:
     st.subheader("📉 Evolución Semanal y Patrones de Asistencia")
@@ -259,14 +344,12 @@ with tab_tendencias:
         df_tend['Fecha_dt'] = pd.to_datetime(df_tend['Fecha'])
         df_tend['Dia_Semana'] = df_tend['Fecha_dt'].dt.day_name()
         
-        dias_orden = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         dias_es = {'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles', 
                    'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'}
         
         df_tend['Dia_Nombre'] = df_tend['Dia_Semana'].map(dias_es)
         dias_es_orden = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
-        # Heatmap Día de Semana vs Equipo
         st.write("#### 🗓️ Presencia Física por Día de la Semana y Equipo")
         df_pres = df_tend[df_tend['Estado'] == 'Presente en la oficina']
         
@@ -274,7 +357,6 @@ with tab_tendencias:
             df_hm = df_pres.groupby(['Equipo', 'Dia_Nombre']).size().reset_index(name='Presentes')
             df_pivot = df_hm.pivot(index='Equipo', columns='Dia_Nombre', values='Presentes').fillna(0)
             
-            # Reordenar columnas por días
             cols_existentes = [d for d in dias_es_orden if d in df_pivot.columns]
             df_pivot = df_pivot[cols_existentes]
             
@@ -301,7 +383,7 @@ with tab_tendencias:
         st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# PESTAÑA 4: CUMPLIMIENTO Y CAPACIDAD
+# PESTAÑA 5: CUMPLIMIENTO Y CAPACIDAD
 # ==========================================
 with tab_cumplimiento:
     st.subheader("🎯 Control de Aforo y Gestión de Cumplimiento")
@@ -332,7 +414,7 @@ with tab_cumplimiento:
             st.success("🎉 No se registraron casos de 'Remoto no justificado' en este filtro.")
 
 # ==========================================
-# PESTAÑA 5: NOTAS Y JUSTIFICACIONES
+# PESTAÑA 6: NOTAS Y JUSTIFICACIONES
 # ==========================================
 with tab_notas:
     st.subheader("📝 Buscador y Registro de Justificaciones")
